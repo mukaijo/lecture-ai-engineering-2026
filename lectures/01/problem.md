@@ -92,3 +92,24 @@ AIE_MODEL=gemini-3.5-flash uv run python -m app.ask "LoRAとは何ですか？"
 ```
 
 temperature を変えるには、`generate_content` の `config` 引数を調べてみましょう。
+`app.ask` では次のように指定できます。
+
+```bash
+uv run python -m app.ask --temperature 0.2 "LoRAとは何ですか？"
+```
+
+### 実装・発展課題の実行例
+
+`--chat` を指定すると、前の質問と回答を踏まえて続けて質問できます。`:q` または Ctrl-D で終了します。
+
+```bash
+uv run python -m app.ask --chat
+```
+
+終了後、各応答の計測値（応答時間・入力トークン数・出力トークン数）が表示されます。モデルを変えて比べる場合は、環境変数を設定して別の実行を行います。
+
+```bash
+AIE_MODEL=gemini-3.5-flash uv run python -m app.ask --chat
+```
+
+複数のモデルや質問で表示された数値を記録して比較してください。無料枠のレート制限はモデルや利用状況によって異なるため、実行間隔を空け、429エラーが出た場合は待ってから再試行してください。
