@@ -5,11 +5,22 @@
 """
 
 import json
+import random
+import re
+from datetime import datetime, timezone
 from functools import cache
 from pathlib import Path
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+LEARNING_LOG_PATH = DATA_DIR.parent / "learning_log" / "learning_log.md"
 MAX_RESULTS = 3
+_SENSITIVE_CONTENT = re.compile(
+    r"(?i)(?:\b(?:[a-z0-9_]*api[_ -]?key|access[_ -]?token|password|secret|credential)\b|"
+    r"APIキー|アクセスキー|アクセストークン|パスワード|秘密鍵|シークレット|認証情報)"
+    r"\s*[:=：＝]\s*\S+|(?<![a-z0-9])(?:AIza[0-9A-Za-z_-]{20,}|"
+    r"sk-[0-9A-Za-z_-]{20,}|gh[pousr]_[0-9A-Za-z_]{20,}|"
+    r"github_pat_[0-9A-Za-z_]{20,}|AKIA[0-9A-Z]{16})(?![a-z0-9])"
+)
 
 
 @cache
@@ -77,3 +88,45 @@ def get_lecture_summary(lecture: int) -> str:
         available = sorted(p.stem for p in (DATA_DIR / "lectures").glob("*.md"))
         return f"第{lecture}回の要点はまだありません。用意されている回: {', '.join(available)}"
     return path.read_text(encoding="utf-8")
+
+
+def make_quiz(lecture: int) -> str:
+    """指定した回の用語から1つを選び、
+    確認問題と答えを返す。
+
+    「第2回の確認問題を出して」のように、
+    復習用の問題を求められたときに使う。
+    """
+    terms = [term for term in load_glossary() if term["lecture"] == lecture]
+    if not terms:
+        return f"第{lecture}回の用語が見つかりませんでした。"
+
+    term = random.choice(terms)
+    return json.dumps(
+        {
+            "question": f"「{term['term']}」の意味は？",
+            "answer": term["definition"],
+        },
+        ensure_ascii=False,
+    )
+
+
+def save_learning_log(content: str) -> str:
+    """学習内容を learning_log/learning_log.md にMarkdown形式で追記する。
+
+    利用者が学んだことの記録保存を明示的に依頼したときに使う。
+    保存前に利用者の承認が必要。APIキーなどの認証情報を含む内容は保存しない。
+    """
+    if _SENSITIVE_CONTENT.search(content):
+        return "APIキーなどの認証情報が含まれる可能性があるため、学習記録を保存しませんでした。"
+    if not content.strip():
+        return "記録内容が空のため、学習記録を保存しませんでした。"
+
+    saved_at = datetime.now(timezone.utc)
+    LEARNING_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    separator = "\n\n---\n\n" if LEARNING_LOG_PATH.exists() and LEARNING_LOG_PATH.stat().st_size else ""
+    with LEARNING_LOG_PATH.open("a", encoding="utf-8") as log_file:
+        log_file.write(
+            f"{separator}## 学習記録\n\n保存日時: {saved_at.isoformat()}\n\n{content.strip()}\n"
+        )
+    return "学習記録を追記しました: learning_log/learning_log.md"
